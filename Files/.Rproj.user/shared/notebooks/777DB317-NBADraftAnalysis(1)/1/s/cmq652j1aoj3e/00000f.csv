@@ -1,0 +1,2 @@
+"0","OnlyPlayer <- subset(DraftData, select = c(Player))"
+"0","write.csv(OnlyPlayer, ""~/Downloads/OnlyPlayer.csv"")"

@@ -1,0 +1,5 @@
+"0","DraftData <- DraftData %>%"
+"0","  mutate("
+"0","    MaxGames = as.numeric(Years) * 82,"
+"0","    AvailabilityScore = GamesPlayed / MaxGames"
+"0","  )"

@@ -1,0 +1,5 @@
+"0","NBAStats2010 <- read.csv(""~/Downloads/2010NBAStats.csv"")"
+"0","NBAStats2011 <- read.csv(""~/Downloads/2011NBAStats.csv"")"
+"0","NBAStats2012 <- read.csv(""~/Downloads/2012NBAStats.csv"")"
+"0","NBAStats2013 <- read.csv(""~/Downloads/2013NBAStats.csv"")"
+"0","NBAStats2014 <- read.csv(""~/Downloads/2014NBAStats.csv"")"

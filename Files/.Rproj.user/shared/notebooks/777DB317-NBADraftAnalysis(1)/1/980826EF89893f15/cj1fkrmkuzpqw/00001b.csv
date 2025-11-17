@@ -1,0 +1,6 @@
+"0","normalize_name <- function(name) {"
+"0","  x_clean <- iconv(NBADraftData$Player, from = ""UTF-8"", to = ""latin1"")"
+"0","  x_clean <- trimws(x_clean)"
+"0","  x_clean"
+"0","}"
+"0","NBADraftData$Player <- normalize_name(NBADraftData$Player)"

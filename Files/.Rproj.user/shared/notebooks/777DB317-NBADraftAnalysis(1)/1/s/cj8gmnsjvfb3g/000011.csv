@@ -1,0 +1,1 @@
+"0","leaderboards <- subset(leaderboards, select = c(Player, Pick, Position, PosRank, FinalScore, Team))"

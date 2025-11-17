@@ -1,0 +1,4 @@
+"0","new_column_values <- rep(NA, nrow(NBADraftData))"
+"0","NBADraftData <- cbind(NBADraftData, STL = new_column_values, BLK = new_column_values, TOV = new_column_values)"
+"0",""
+"0",""

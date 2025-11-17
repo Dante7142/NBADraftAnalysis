@@ -1,0 +1,5 @@
+"0",""
+"0","NBADraftData <-read.csv(""~/Downloads/DraftData1995-2015 .csv"")"
+"0",""
+"0","PlayerID <- read.csv(""~/Downloads/NBA_Player_IDs.csv"")"
+"0","PlayerID <- rename(PlayerID, Player=BBRefName)"

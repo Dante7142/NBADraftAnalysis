@@ -1,0 +1,2 @@
+"0","FinalDraftData <- FinalDraftData %>%"
+"0","   left_join(avg_by_pick, by = ""Pick"")"

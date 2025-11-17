@@ -1,0 +1,7 @@
+"0","DraftDataFiltered <- DraftDataFiltered %>%"
+"0","  mutate(DraftBin = case_when("
+"0","    Pick >= 1 & Pick <= 15  ~ ""1-15"","
+"0","    Pick >= 16 & Pick <= 30 ~ ""16-30"","
+"0","    Pick >= 31 & Pick <= 60 ~ ""31-60"","
+"0","    TRUE ~ ""Other"""
+"0","  ))"

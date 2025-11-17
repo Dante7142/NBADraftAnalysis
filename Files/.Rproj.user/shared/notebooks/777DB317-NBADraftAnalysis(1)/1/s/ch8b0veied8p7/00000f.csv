@@ -1,0 +1,7 @@
+"0","#Average of PerformanceScores per Pick=ExpectedScore"
+"0","avg_by_pick <- DraftDataFiltered %>%"
+"0","  group_by(Pick) %>%"
+"0","  summarise("
+"0","    ExpectedScore = mean(PerformanceScore, na.rm = TRUE),"
+"0","    Count = n()"
+"0","  )"

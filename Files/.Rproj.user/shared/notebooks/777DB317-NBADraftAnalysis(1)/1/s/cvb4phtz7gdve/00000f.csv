@@ -1,0 +1,6 @@
+"0","leaderboards <- FinalDraftData %>%"
+"0","  filter(!is.na(Position), !is.na(FinalScore)) %>%"
+"0","  group_by(Position) %>%"
+"0","  arrange(desc(FinalScore), .by_group = TRUE) %>%"
+"0","  mutate(PosRank = row_number()) %>%"
+"0","  ungroup()"

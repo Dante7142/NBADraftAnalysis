@@ -1,0 +1,4 @@
+"0","NBADraftData <- NBADraftData %>%"
+"0","  select(X.1, X.2, Round.1, X.4,Totals, Shooting, X.9, X.10, Per.Game, X.11, X.12, X.13, Advanced, X.14, X.15, X.16,)"
+"0","NBADraftData<-rename(NBADraftData, Pick=X.1, Team=X.2, Years=X.4, ""FGPercent""=Shooting, ""ThreePointPercent""=X.9, ""FreeThrowPercent""= X.10, ""MPG"" = Per.Game, PTS = X.11, TRB=X.12, AST=X.13, WS=Advanced, ""WS/48""=X.14, BPM=X.15, VORP=X.16, Player=Round.1, GamesPlayed=Totals)"
+"0",""
