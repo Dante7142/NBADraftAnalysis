@@ -1,0 +1,687 @@
+---
+title: "NBADraftAnalysis"
+output: html_document
+date: "2025-05-12"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+```{r}
+
+library(dplyr)
+library(stringi)
+library(hoopR)
+library(ggplot2)
+
+
+```
+
+## R Markdown
+```{r}
+#reads the csvs
+NBADraftData <-read.csv("~/Downloads/DraftData1995-2015 .csv")
+
+PlayerID <- read.csv("~/Downloads/NBA_Player_IDs.csv")
+PlayerID <- rename(PlayerID, Player=BBRefName)
+```
+
+```{r}
+#renaming and removing columns
+NBADraftData <- NBADraftData %>%
+  select(X.1, X.2, Round.1, X.4,Totals, Shooting, X.9, X.10, Per.Game, X.11, X.12, X.13, Advanced, X.14, X.15, X.16,)
+NBADraftData<-rename(NBADraftData, Pick=X.1, Team=X.2, Years=X.4, "FGPercent"=Shooting, "ThreePointPercent"=X.9, "FreeThrowPercent"= X.10, "MPG" = Per.Game, PTS = X.11, TRB=X.12, AST=X.13, WS=Advanced, "WS/48"=X.14, BPM=X.15, VORP=X.16, Player=Round.1, GamesPlayed=Totals)
+
+```
+
+```{r}
+#standardizes player names
+NBADraftData$Player <- stri_trans_general(NBADraftData$Player, "Latin-ASCII")
+DraftData <- left_join(
+  NBADraftData,
+  PlayerID %>% select(NBAName, NBAID),
+  by = c("Player" = "NBAName")
+)
+
+```
+```{r}
+#dataset filtering
+DraftData[DraftData == ""] <- 0
+DraftData <- DraftData %>%
+  mutate(
+    PTS = as.numeric(PTS),
+    TRB = as.numeric(TRB),
+    AST = as.numeric(AST),
+    ThreePointPercent = as.numeric(ThreePointPercent),
+    FGPercent = as.numeric(FGPercent),
+    FreeThrowPercent = as.numeric(FreeThrowPercent),
+    GamesPlayed = as.numeric(GamesPlayed),
+    MPG = as.numeric(MPG),
+    Years = as.numeric(Years),
+    Pick = as.numeric(Pick),
+    WS = as.numeric(WS),
+    `WS/48`= as.numeric(`WS/48`),
+    VORP=as.numeric(VORP)
+  )
+DraftData <- DraftData %>%
+  filter(DraftData$Years > 2)
+
+```
+
+```{r}
+#Takes out duplicates
+DraftData <- DraftData %>% distinct(Player, .keep_all = TRUE)
+```
+
+```{r}
+#get steals blocks and turnovers
+new_column_values <- rep(NA, nrow(DraftData))
+DraftData <- cbind(DraftData, STL = new_column_values, BLK = new_column_values, TOV = new_column_values)
+# first initialize the vectors outside the loop
+#gets steals, blocks and turnovers
+new_steals <- c()
+new_blocks <- c()
+new_turnovers <- c()
+
+
+for (i in DraftData$NBAID) {
+  Sys.sleep(0.5)
+  
+  if (is.na(i)) {
+    next  # skip this iteration
+  }
+  
+  stringNBAID <- as.character(i)
+  print(paste("Working on player ID:", stringNBAID))
+  
+  PlayerCareerStats <- nba_playercareerstats(
+    league_id = "00",
+    per_mode = "Totals",
+    player_id = stringNBAID
+  )
+  
+  PlayerSteals <- PlayerCareerStats$CareerTotalsRegularSeason["STL"]
+  PlayerBlocks <- PlayerCareerStats$CareerTotalsRegularSeason["BLK"]
+  PlayerTurnovers <- PlayerCareerStats$CareerTotalsRegularSeason["TOV"]
+  
+  # preview what you got from the API
+  print(paste("ID:", stringNBAID, 
+              "STL:", PlayerSteals, 
+              "BLK:", PlayerBlocks, 
+              "TOV:", PlayerTurnovers))
+  
+  # store them into your running vectors
+  new_steals[stringNBAID] <- PlayerSteals
+  new_blocks[stringNBAID] <- PlayerBlocks
+  new_turnovers[stringNBAID] <- PlayerTurnovers
+}
+DraftData$STL <- new_steals[as.character(DraftData$NBAID)]
+DraftData$BLK <- new_blocks[as.character(DraftData$NBAID)]
+DraftData$TOV <- new_turnovers[as.character(DraftData$NBAID)]
+
+
+```
+
+```{r}
+#Manual Entering for PlayerIDs that did not merge:
+DraftData$STL[101] <- 228
+DraftData$BLK[101] <- 411
+DraftData$TOV[101] <- 101
+
+DraftData$STL[66] <- 6
+DraftData$BLK[66] <- 2
+DraftData$TOV[66] <- 7
+
+DraftData$STL[179] <- 25
+DraftData$BLK[179] <- 35
+DraftData$TOV[179] <- 68
+
+DraftData$STL[213] <- 17
+DraftData$BLK[213] <- 64
+DraftData$TOV[213] <- 40
+
+DraftData$STL[228] <- 2
+DraftData$BLK[228] <- 2
+DraftData$TOV[228] <- 2
+
+DraftData$STL[292] <- 189
+DraftData$BLK[292] <- 75
+DraftData$TOV[292] <- 370
+
+DraftData$STL[295] <- 404
+DraftData$BLK[295] <- 100
+DraftData$TOV[295] <- 742
+
+DraftData$STL[311] <- 73
+DraftData$BLK[311] <- 107
+DraftData$TOV[311] <- 277
+
+DraftData$STL[358] <- 974
+DraftData$BLK[358] <- 204
+DraftData$TOV[358] <- 1315
+
+DraftData$STL[403] <- 601
+DraftData$BLK[403] <- 254
+DraftData$TOV[403] <- 724
+
+DraftData$STL[450] <- 943
+DraftData$BLK[450] <- 243
+DraftData$TOV[450] <- 816
+
+DraftData$STL[509] <- 274
+DraftData$BLK[509] <- 309
+DraftData$TOV[509] <- 774
+
+DraftData$STL[519] <- 39
+DraftData$BLK[519] <- 57
+DraftData$TOV[519] <- 65
+
+DraftData$STL[574] <- 125
+DraftData$BLK[574] <- 9
+DraftData$TOV[574] <- 229
+
+DraftData$STL[613] <- 2
+DraftData$BLK[613] <- 9
+DraftData$TOV[613] <- 6
+
+DraftData$STL[616] <- 296
+DraftData$BLK[616] <- 393
+DraftData$TOV[616] <- 1076
+
+DraftData$STL[682] <- 36
+DraftData$BLK[682] <- 33
+DraftData$TOV[682] <- 60
+
+DraftData$STL[764] <- 13
+DraftData$BLK[764] <- 3
+DraftData$TOV[764] <- 12
+
+DraftData$STL[767] <- 70
+DraftData$BLK[767] <- 94
+DraftData$TOV[767] <- 151
+
+DraftData$STL[770] <- 32
+DraftData$BLK[770] <- 19
+DraftData$TOV[770] <- 77
+
+DraftData$STL[806] <- 18
+DraftData$BLK[806] <- 4
+DraftData$TOV[806] <- 13
+
+
+
+
+```
+
+
+```{r}
+#create averages for steals, blocks and turnovers
+DraftData$STL <- as.numeric(unlist(DraftData$STL))
+DraftData$BLK <- as.numeric(unlist(DraftData$BLK))
+DraftData$TOV <- as.numeric(unlist(DraftData$TOV))
+DraftData <- DraftData %>%
+  mutate(STL = (STL)/as.numeric(GamesPlayed), BLK = (BLK)/as.numeric(GamesPlayed), TOV = (TOV)/as.numeric(GamesPlayed) )
+DraftData$STL <- round(DraftData$STL, digits = 3)
+DraftData$BLK <- round(DraftData$BLK, digits = 3)
+DraftData$TOV <- round(DraftData$TOV, digits = 3)
+
+
+```
+
+```{r}
+#Create AvailabilityScore
+DraftData <- DraftData %>%
+  mutate(
+    MaxGames = as.numeric(Years) * 82,
+    AvailabilityScore = GamesPlayed / MaxGames
+  )
+```
+
+```{r}
+#merge player positions to dataset
+OnlyPlayer <- subset(DraftData, select = c(Player))
+write.csv(OnlyPlayer, "~/Downloads/OnlyPlayer.csv")
+library(dplyr)
+library(readr)
+library(stringi)
+library(stringr)
+library(hoopR)
+
+# 1) load your names (expects a 'Player' col; keeps it unchanged)
+players <- read_csv("OnlyPlayer.csv", show_col_types = FALSE)
+if (!"Player" %in% names(players)) names(players)[1] <- "Player"
+players <- players %>% mutate(Player = as.character(Player))
+
+# 2) pull NBA Player Index (internet; includes POSITION)
+pi <- hoopR::nba_playerindex(historical = 1)$PlayerIndex
+
+# Build two lookup tables for exact joins
+idx_fl <- pi %>%
+  transmute(name_fl = paste0(PLAYER_FIRST_NAME, " ", PLAYER_LAST_NAME),
+            Position = POSITION) %>%
+  group_by(name_fl) %>% summarise(Position = Position[1], .groups = "drop")
+
+idx_lf <- pi %>%
+  transmute(name_lf = paste0(PLAYER_LAST_NAME, ", ", PLAYER_FIRST_NAME),
+            Position_lf = POSITION) %>%
+  group_by(name_lf) %>% summarise(Position_lf = Position_lf[1], .groups = "drop")
+
+# 3) exact join on "First Last"
+out <- players %>%
+  left_join(idx_fl, by = c("Player" = "name_fl"))
+
+# 4) exact join on "Last, First" for still-missing
+if (any(is.na(out$Position))) {
+  out_missing <- out %>%
+    filter(is.na(Position)) %>%
+    mutate(Player_lf = if_else(str_detect(Player, "\\s"),
+                               paste0(word(Player, -1), ", ", word(Player, 1, -2)),
+                               Player))
+  out_filled <- out_missing %>%
+    left_join(idx_lf, by = c("Player_lf" = "name_lf")) %>%
+    mutate(Position = coalesce(Position, Position_lf)) %>%
+    select(-Player_lf, -Position_lf)
+
+  out <- out %>%
+    filter(!is.na(Position)) %>%
+    bind_rows(out_filled)
+}
+
+# 5) fuzzy fallback with base R adist() (no new packages)
+if (any(is.na(out$Position))) {
+  # normalized copies ONLY for matching; original Player stays unchanged
+  idx_names_norm <- str_squish(stri_trans_general(tolower(idx_fl$name_fl), "Latin-ASCII"))
+  pos_vec <- idx_fl$Position
+
+  missing_idx <- which(is.na(out$Position))
+  for (k in missing_idx) {
+    p_raw  <- out$Player[k]
+    p_norm <- str_squish(stri_trans_general(tolower(p_raw), "Latin-ASCII"))
+    d <- adist(p_norm, idx_names_norm, ignore.case = TRUE)
+    j <- which.min(d)
+    min_d <- d[j]
+    # simple guard: accept if edit distance is small vs name length
+    rel <- min_d / max(1, nchar(p_norm))
+    if (!is.na(min_d) && (min_d <= 2 || rel <= 0.12)) {
+      out$Position[k] <- pos_vec[j]
+    }
+  }
+}
+
+# 6) final df (no files written)
+players_positions_df <- out %>%
+  transmute(Player, Position = if_else(is.na(Position), "Unknown", Position))
+
+# (optional) see quick stats
+unknown_n <- sum(players_positions_df$Position == "Unknown")
+cat("Players:", nrow(players_positions_df), " | Unknown positions:", unknown_n, "\n")
+# collapse to a single primary position: G / F / C
+primary_pos <- function(x) {
+  vapply(x, function(pos) {
+    if (is.na(pos) || pos == "") return(NA_character_)
+    s <- tolower(pos)
+
+    # find earliest mention of each bucket
+    ix_g <- min(c(regexpr("pg", s), regexpr("sg", s), regexpr("guard", s), regexpr("\\bg\\b", s)))
+    ix_f <- min(c(regexpr("sf", s), regexpr("pf", s), regexpr("forward", s), regexpr("\\bf\\b", s)))
+    ix_c <- min(c(regexpr("center", s), regexpr("\\bc\\b", s)))
+
+    idx <- c(G = ix_g[1], F = ix_f[1], C = ix_c[1])
+    idx[idx == -1] <- Inf
+
+    if (all(is.infinite(idx))) {
+      # fallback: take first g/f/c that appears in the string (covers "g-f", "f/c", etc.)
+      m <- regexpr("[gfc]", s)
+      if (m == -1) return(NA_character_) else return(toupper(substr(s, m, m)))
+    } else {
+      return(names(which.min(idx)))
+    }
+  }, character(1))
+}
+
+# apply to your df
+players_positions_df$Position <- primary_pos(players_positions_df$Position)
+players_positions_df$Position[is.na(players_positions_df$Position)] <- "Unknown"
+```
+
+
+```{r}
+#manually enter players with wrong or missing positions and merge to main dataset
+players_positions_df$Position[73] <- "F"
+players_positions_df$Position[48] <- "G"
+players_positions_df$Position[702] <- "C"
+players_positions_df$Position[795] <- "G"
+players_positions_df$Position[796] <- "G"
+players_positions_df$Position[797] <- "C"
+players_positions_df$Position[807] <- "F"
+players_positions_df$Position[810] <- "F"
+players_positions_df$Position[816] <- "F"
+
+DraftData <- DraftData %>% left_join(players_positions_df, by = "Player")
+```
+
+
+```{r}
+# optimization model to make weights for PerformanceScore
+library(dplyr)
+library(stringr)
+
+# ensure numeric
+num_cols <- c("PTS","TRB","AST","STL","BLK","TOV",
+              "FGPercent","FreeThrowPercent","ThreePointPercent","AvailabilityScore")
+for (cn in num_cols) if (cn %in% names(DraftData)) DraftData[[cn]] <- as.numeric(DraftData[[cn]])
+
+# map positions to G/F/C (in case of stray lowercase)
+DraftData <- DraftData %>% mutate(Pos3 = toupper(Position))
+install.packages(c("glmnet", "dplyr", "tidyr", "scales"))
+library(glmnet)
+library(dplyr)
+FinalDraftData <- FinalDraftData %>%
+  FinalDraftData[is.na(FinalDraftData)] <- 0 %>%
+  mutate(Position = factor(Position))
+get_position_weights <- function(data, position_name) {
+  
+  position_data <- data %>% filter(Position == position_name)
+  
+  # Select predictor columns
+  features <- position_data %>%
+    select(PTS, TRB, AST, STL, BLK, TOV, FGPercent, FreeThrowPercent, ThreePointPercent)
+  
+  # Standardize features
+  x <- scale(as.matrix(features))
+  y <- position_data$VORP
+  
+  # Fit ridge regression
+  cvfit <- cv.glmnet(x, y, alpha = 0)  # alpha=0 -> ridge
+  model <- glmnet(x, y, alpha = 0, lambda = cvfit$lambda.min)
+  
+  # Extract coefficients
+  weights <- as.numeric(coef(model))[-1]  # drop intercept
+  names(weights) <- colnames(features)
+  
+  # Normalize so weights sum to 1 (for interpretability)
+  weights_norm <- weights / sum(abs(weights))
+  
+  tibble(Position = position_name,
+         Stat = names(weights_norm),
+         Weight = weights_norm)
+}
+weights_guard   <- get_position_weights(FinalDraftData, "G")
+weights_forward <- get_position_weights(FinalDraftData, "F")
+weights_center  <- get_position_weights(FinalDraftData, "C")
+
+all_weights <- bind_rows(weights_guard, weights_forward, weights_center)
+print(all_weights)
+```
+
+```{r}
+# PerformanceScore
+DraftData <- DraftData %>%
+  mutate(
+    PerformanceScore= case_when(
+      Position == "G" ~ (
+         0.301392942*PTS + 0.131585761*TRB + 0.245252914*AST + 0.071600908*STL + 0.088402778*BLK - 0.110155566*TOV + 0.003795444*FGPercent          + 0.029598577*FreeThrowPercent + 0.018215110*ThreePointPercent + 0.015*AvailabilityScore
+      ),
+      Position == "F" ~ (
+        0.278032221*PTS + 0.035431424*TRB + 0.363261918*AST + 0.003023791*STL + 0.143949521*BLK -0.141206541*TOV + 0.001456723*FGPercent +         0.009143780*FreeThrowPercent + 0.024494081*ThreePointPercent +0.015*AvailabilityScore
+      ),
+      Position == "C" ~ (
+        0.166423233*PTS + 0.099124073*TRB + 0.377695524*AST + 0.006508985*STL + 0.093415676*BLK - 0.159690953*TOV + 0.054962999*FGPercent +         0.013530175*FreeThrowPercent + 0.028648381*ThreePointPercent +0.015*AvailabilityScore
+      ),
+      TRUE ~ NA_real_
+    )
+  )
+
+
+```
+
+```{r}
+#Average of PerformanceScores per Pick=ExpectedScore
+DraftDataFiltered <- DraftData
+DraftDataFiltered <- DraftDataFiltered %>%
+  mutate(DraftBin = case_when(
+    Pick >= 1 & Pick <= 15  ~ "1-15",
+    Pick >= 16 & Pick <= 30 ~ "16-30",
+    Pick >= 31 & Pick <= 60 ~ "31-60",
+    TRUE ~ "Other"
+  ))
+avg_by_pick <- DraftDataFiltered %>%
+  group_by(Pick) %>%
+  summarise(
+    ExpectedScore = mean(PerformanceScore, na.rm = TRUE),
+    Count = n()
+  )
+```
+
+```{r}
+# Make FinalScore
+FinalDraftData <- DraftDataFiltered
+FinalDraftData <- FinalDraftData %>%
+   left_join(avg_by_pick, by = "Pick")
+FinalDraftData <- FinalDraftData %>%
+  group_by(Pick) %>% 
+  mutate(
+    FinalScore = (PerformanceScore - mean(PerformanceScore, na.rm = TRUE)) 
+  ) %>%
+  ungroup()
+```
+
+```{r}
+#make the final leaderboards
+leaderboards <- FinalDraftData %>%
+  filter(!is.na(Position), !is.na(FinalScore)) %>%
+  group_by(Position) %>%
+  arrange(desc(FinalScore), .by_group = TRUE) %>%
+  mutate(PosRank = row_number()) %>%
+  ungroup()
+  leaderboards <- subset(leaderboards, select = c(Player, Pick, Position, PosRank, FinalScore, Team))
+```
+
+```{r}
+#manually enter teams for players with the wrong ones
+leaderboards$Team[leaderboards$Player %in% c("Rasheed Wallace")] <- "WAS"
+leaderboards$Team[leaderboards$Player %in% c("Dwight Powell",
+  "Frank Kaminsky",
+  "Noah Vonleh",
+  "Shabazz Napier",
+  "Jamaal Magloire",
+  "George Zidek",
+  "Ricky Davis",
+  "Malik Rose",
+  "Lee Nailon",
+  "Kobe Bryant",
+  "Baron Davis",
+  "Tony Delk",
+  "George Zidek")] <- "CHA"
+leaderboards$Team[leaderboards$Player %in% c("Bryant Reeves",
+  "Shareef Abdur-Rahim",
+  "Roy Rogers",
+  "Obinna Ekezie",
+  "Stromile Swift",
+  "Steve Francis",
+  "Mike Bibby",
+  "Lawrence Moten",
+  "Antonio Daniels")] <- "MEM"
+leaderboards$Team[leaderboards$Player %in% c("Hilton Armstrong", "Julian Wright", "Cedric Simmons")] <- "NOH"
+leaderboards$Team[leaderboards$Player %in% c("Mason Plumlee", "Chris McCullough", "Pat Connaughton")] <- "NJN"
+leaderboards$Team[leaderboards$Player %in% c("Mark Blount",
+  "Johan Petro",
+  "Robert Swift",
+  "Vladimir Stepania",
+  "Olumide Oyedeji",
+  "Mouhamed Sene",
+  "Kevin Durant",
+  "Rashard Lewis",
+  "Corey Maggette",
+  "Serge Ibaka",
+  "Bobby Simmons",
+  "Carl Landry",
+  "Glen Davis",
+  "Vladimir Radmanovic",
+  "Nick Collison",
+  "Jelani McCoy",
+  "Mickael Gelabale",
+  "Russell Westbrook",
+  "Desmond Mason",
+  "Bobby Jackson",
+  "Luke Ridnour",
+  "Earl Watson",
+  "Willie Green",
+  "Drew Barry")] <- "OKC"
+```
+
+
+
+```{r}
+# make team summary
+library(dplyr)
+
+team_summary <- leaderboards %>%
+  group_by(Team) %>%
+  summarise(
+    AvgFinalScore = mean(FinalScore, na.rm = TRUE),
+    MedianFinalScore = median(FinalScore, na.rm = TRUE),
+    Count = n()
+  ) %>%
+  arrange(desc(AvgFinalScore))
+```
+
+
+```{r}
+#graph of best player vs worst player per draft pick
+library(ggplot2)
+library(dplyr)
+library(ggrepel)  # install.packages("ggrepel") if not installed
+
+# Filter for lottery picks
+lottery_data <- FinalDraftData %>%
+  filter(Pick <= 15)
+
+# Calculate average, best, and worst per pick
+pick_summary <- lottery_data %>%
+  group_by(Pick) %>%
+  summarise(
+    AvgPerformance = mean(PerformanceScore, na.rm = TRUE),
+    BestPlayer = Player[which.max(PerformanceScore)],
+    BestScore = max(PerformanceScore, na.rm = TRUE),
+    WorstPlayer = Player[which.min(PerformanceScore)],
+    WorstScore = min(PerformanceScore, na.rm = TRUE)
+  )
+
+# Plot (no gray or blue layers)
+ggplot(lottery_data, aes(x = Pick, y = PerformanceScore)) +
+  
+  # Best players (green points + labels)
+  geom_point(data = pick_summary, aes(x = Pick, y = BestScore),
+             color = "darkgreen", size = 3) +
+  geom_text_repel(
+    data = pick_summary,
+    aes(x = Pick, y = BestScore, label = BestPlayer),
+    color = "darkgreen", size = 3, nudge_y = 2
+  ) +
+  
+  # Worst players (red points + labels)
+  geom_point(data = pick_summary, aes(x = Pick, y = WorstScore),
+             color = "red", size = 3) +
+  geom_text_repel(
+    data = pick_summary,
+    aes(x = Pick, y = WorstScore, label = WorstPlayer),
+    color = "red", size = 3, nudge_y = -2
+  ) +
+  
+  scale_x_continuous(breaks = 1:15) +
+  labs(
+    title = "Lottery Picks (1–15): Best and Worst Players by Draft Pick",
+    subtitle = "Green = Best Player | Red = Worst Player",
+    x = "Draft Pick",
+    y = "Performance Score"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+#find players closest to average per pick
+library(ggplot2)
+library(dplyr)
+library(ggrepel)
+
+# Filter for lottery picks
+lottery_data <- FinalDraftData %>%
+  filter(Pick <= 15)
+
+# Calculate average per pick
+pick_summary <- lottery_data %>%
+  group_by(Pick) %>%
+  summarise(
+    AvgPerformance = mean(PerformanceScore, na.rm = TRUE)
+  )
+
+# Find player closest to average for each pick
+closest_players <- lottery_data %>%
+  inner_join(pick_summary, by = "Pick") %>%
+  group_by(Pick) %>%
+  slice_min(abs(PerformanceScore - AvgPerformance), n = 1, with_ties = FALSE) %>%
+  ungroup()
+
+# Plot only blue trend line + representative players
+ggplot() +
+  # Blue line for average trend
+  geom_line(data = pick_summary, aes(x = Pick, y = AvgPerformance),
+            color = "blue", size = 1.3) +
+  geom_point(data = pick_summary, aes(x = Pick, y = AvgPerformance),
+             color = "blue", size = 3) +
+
+  # Closest-to-average players (labeled)
+  geom_point(data = closest_players,
+             aes(x = Pick, y = PerformanceScore),
+             color = "black", size = 3.5) +
+  geom_text_repel(
+    data = closest_players,
+    aes(x = Pick, y = PerformanceScore, label = Player),
+    color = "black", size = 3.5, nudge_y = 1.5, fontface = "bold"
+  ) +
+
+  scale_x_continuous(breaks = 1:15) +
+  labs(
+    title = "Lottery Picks (1–15): Average Performance and Representative Players",
+    subtitle = "Blue line = Average PerformanceScore | Black dots = Players Closest to Average",
+    x = "Draft Pick",
+    y = "Performance Score"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5)
+  )
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Sort teams by average score for nicer visual order
+team_summary <- team_summary %>%
+  arrange(desc(AvgFinalScore)) %>%
+  mutate(Team = factor(Team, levels = Team))
+
+# Plot average FinalScore per team
+ggplot(team_summary, aes(x = Team, y = AvgFinalScore, group = 1)) +
+  geom_line(color = "steelblue", size = 1.2) +
+  geom_point(color = "steelblue", size = 3) +
+  labs(
+    title = "Average FinalScore by Team",
+    x = "Team",
+    y = "Average FinalScore"
+  ) +
+  theme_minimal(base_size = 13) +
+  theme(
+    axis.text.x = element_text(angle = 45, hjust = 1),
+    plot.title = element_text(face = "bold", hjust = 0.5)
+  )
+
+```
+
