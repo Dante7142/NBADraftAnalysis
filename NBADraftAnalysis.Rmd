@@ -237,10 +237,11 @@ DraftData <- DraftData %>%
   )
 ```
 
+
 ```{r}
 #merge player positions to dataset
 OnlyPlayer <- subset(DraftData, select = c(Player))
-write.csv(OnlyPlayer, "~/Downloads/OnlyPlayer.csv")
+write.csv(OnlyPlayer, "~/Downloads/SportsAnalyticsProjects/NBADraftAnalysis/OnlyPlayer.csv")
 library(dplyr)
 library(readr)
 library(stringi)
@@ -360,6 +361,9 @@ players_positions_df$Position[816] <- "F"
 DraftData <- DraftData %>% left_join(players_positions_df, by = "Player")
 ```
 
+```{r}
+players_positions_df$Position[73] <- "F"
+```
 
 ```{r}
 # optimization model to make weights for PerformanceScore
@@ -373,11 +377,11 @@ for (cn in num_cols) if (cn %in% names(DraftData)) DraftData[[cn]] <- as.numeric
 
 # map positions to G/F/C (in case of stray lowercase)
 DraftData <- DraftData %>% mutate(Pos3 = toupper(Position))
-install.packages(c("glmnet", "dplyr", "tidyr", "scales"))
+#install.packages(c("glmnet", "dplyr", "tidyr", "scales"))
 library(glmnet)
 library(dplyr)
+  FinalDraftData[is.na(FinalDraftData)] <- 0
 FinalDraftData <- FinalDraftData %>%
-  FinalDraftData[is.na(FinalDraftData)] <- 0 %>%
   mutate(Position = factor(Position))
 get_position_weights <- function(data, position_name) {
   
@@ -435,8 +439,10 @@ DraftData <- DraftData %>%
 
 ```
 
+
 ```{r}
 #Average of PerformanceScores per Pick=ExpectedScore
+write.csv(DraftData, "~/Downloads/SportsAnalyticsProjects/NBADraftAnalysis/DraftData.csv")
 DraftDataFiltered <- DraftData
 DraftDataFiltered <- DraftDataFiltered %>%
   mutate(DraftBin = case_when(
@@ -464,6 +470,10 @@ FinalDraftData <- FinalDraftData %>%
     FinalScore = (PerformanceScore - mean(PerformanceScore, na.rm = TRUE)) 
   ) %>%
   ungroup()
+```
+
+```{r}
+write.csv(FinalDraftData, "~/Downloads/SportsAnalyticsProjects/NBADraftAnalysis/FinalDraftData.csv")
 ```
 
 ```{r}
@@ -528,8 +538,8 @@ leaderboards$Team[leaderboards$Player %in% c("Mark Blount",
   "Earl Watson",
   "Willie Green",
   "Drew Barry")] <- "OKC"
+write.csv(leaderboards, "~/Downloads/SportsAnalyticsProjects/NBADraftAnalysis/leaderboards.csv")
 ```
-
 
 
 ```{r}
@@ -544,119 +554,90 @@ team_summary <- leaderboards %>%
     Count = n()
   ) %>%
   arrange(desc(AvgFinalScore))
+write.csv(team_summary, "~/Downloads/SportsAnalyticsProjects/NBADraftAnalysis/team_summary.csv")
 ```
-
 
 ```{r}
 #graph of best player vs worst player per draft pick
 library(ggplot2)
 library(dplyr)
-library(ggrepel)  # install.packages("ggrepel") if not installed
+library(ggrepel)
 
-# Filter for lottery picks
-lottery_data <- FinalDraftData %>%
-  filter(Pick <= 15)
+positions <- c("G", "F", "C")
 
-# Calculate average, best, and worst per pick
-pick_summary <- lottery_data %>%
-  group_by(Pick) %>%
-  summarise(
-    AvgPerformance = mean(PerformanceScore, na.rm = TRUE),
-    BestPlayer = Player[which.max(PerformanceScore)],
-    BestScore = max(PerformanceScore, na.rm = TRUE),
-    WorstPlayer = Player[which.min(PerformanceScore)],
-    WorstScore = min(PerformanceScore, na.rm = TRUE)
-  )
+for (pos in positions) {
+  pos_data <- FinalDraftData %>%
+    filter(Pick <= 15, Position == pos)
 
-# Plot (no gray or blue layers)
-ggplot(lottery_data, aes(x = Pick, y = PerformanceScore)) +
-  
-  # Best players (green points + labels)
-  geom_point(data = pick_summary, aes(x = Pick, y = BestScore),
-             color = "darkgreen", size = 3) +
-  geom_text_repel(
-    data = pick_summary,
-    aes(x = Pick, y = BestScore, label = BestPlayer),
-    color = "darkgreen", size = 3, nudge_y = 2
-  ) +
-  
-  # Worst players (red points + labels)
-  geom_point(data = pick_summary, aes(x = Pick, y = WorstScore),
-             color = "red", size = 3) +
-  geom_text_repel(
-    data = pick_summary,
-    aes(x = Pick, y = WorstScore, label = WorstPlayer),
-    color = "red", size = 3, nudge_y = -2
-  ) +
-  
-  scale_x_continuous(breaks = 1:15) +
-  labs(
-    title = "Lottery Picks (1–15): Best and Worst Players by Draft Pick",
-    subtitle = "Green = Best Player | Red = Worst Player",
-    x = "Draft Pick",
-    y = "Performance Score"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title = element_text(face = "bold", hjust = 0.5),
-    plot.subtitle = element_text(hjust = 0.5)
-  )
+  pos_summary <- pos_data %>%
+    group_by(Pick) %>%
+    summarise(
+      BestPlayer = Player[which.max(PerformanceScore)],
+      BestScore = max(PerformanceScore, na.rm = TRUE),
+      WorstPlayer = Player[which.min(PerformanceScore)],
+      WorstScore = min(PerformanceScore, na.rm = TRUE)
+    )
+
+  p <- ggplot() +
+    geom_point(data = pos_summary, aes(x = Pick, y = BestScore),
+               color = "darkgreen", size = 3) +
+    geom_text_repel(data = pos_summary, aes(x = Pick, y = BestScore, label = BestPlayer),
+                    color = "darkgreen", size = 3, nudge_y = 1.2) +
+    geom_point(data = pos_summary, aes(x = Pick, y = WorstScore),
+               color = "red3", size = 3) +
+    geom_text_repel(data = pos_summary, aes(x = Pick, y = WorstScore, label = WorstPlayer),
+                    color = "red3", size = 3, nudge_y = -1.2) +
+    scale_x_continuous(breaks = 1:15) +
+    labs(
+      title = paste0("Lottery Picks (1–15): Best and Worst ", pos, "s by Draft Pick"),
+      subtitle = "Green = Best Performer | Red = Worst Performer",
+      x = "Draft Pick",
+      y = "Performance Score"
+    ) +
+    theme_minimal(base_size = 13) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(hjust = 0.5)
+    )
+
+  print(p)
+}
 ```
 
 ```{r}
 #find players closest to average per pick
-library(ggplot2)
-library(dplyr)
-library(ggrepel)
+for (pos in positions) {
+  pos_data <- FinalDraftData %>%
+    filter(Pick <= 15, Position == pos)
 
-# Filter for lottery picks
-lottery_data <- FinalDraftData %>%
-  filter(Pick <= 15)
+  pos_summary <- pos_data %>%
+    group_by(Pick) %>%
+    summarise(
+      AvgPerformance = mean(PerformanceScore, na.rm = TRUE),
+      ClosestPlayer = Player[which.min(abs(PerformanceScore - mean(PerformanceScore, na.rm = TRUE)))],
+      ClosestScore = PerformanceScore[which.min(abs(PerformanceScore - mean(PerformanceScore, na.rm = TRUE)))]
+    )
 
-# Calculate average per pick
-pick_summary <- lottery_data %>%
-  group_by(Pick) %>%
-  summarise(
-    AvgPerformance = mean(PerformanceScore, na.rm = TRUE)
-  )
+  p <- ggplot(pos_summary, aes(x = Pick)) +
+    geom_line(aes(y = AvgPerformance), color = "blue", size = 1.2) +
+    geom_point(aes(y = ClosestScore), color = "black", size = 2.5) +
+    geom_text_repel(aes(y = ClosestScore, label = ClosestPlayer),
+                    color = "black", size = 3, nudge_y = 0.5) +
+    scale_x_continuous(breaks = 1:15) +
+    labs(
+      title = paste0("Lottery Picks (1–15): Average Performance and Representative ", pos, "s"),
+      subtitle = "Blue line = Avg PerformanceScore | Black dots = Closest to Average",
+      x = "Draft Pick",
+      y = "Performance Score"
+    ) +
+    theme_minimal(base_size = 13) +
+    theme(
+      plot.title = element_text(face = "bold", hjust = 0.5),
+      plot.subtitle = element_text(hjust = 0.5)
+    )
 
-# Find player closest to average for each pick
-closest_players <- lottery_data %>%
-  inner_join(pick_summary, by = "Pick") %>%
-  group_by(Pick) %>%
-  slice_min(abs(PerformanceScore - AvgPerformance), n = 1, with_ties = FALSE) %>%
-  ungroup()
-
-# Plot only blue trend line + representative players
-ggplot() +
-  # Blue line for average trend
-  geom_line(data = pick_summary, aes(x = Pick, y = AvgPerformance),
-            color = "blue", size = 1.3) +
-  geom_point(data = pick_summary, aes(x = Pick, y = AvgPerformance),
-             color = "blue", size = 3) +
-
-  # Closest-to-average players (labeled)
-  geom_point(data = closest_players,
-             aes(x = Pick, y = PerformanceScore),
-             color = "black", size = 3.5) +
-  geom_text_repel(
-    data = closest_players,
-    aes(x = Pick, y = PerformanceScore, label = Player),
-    color = "black", size = 3.5, nudge_y = 1.5, fontface = "bold"
-  ) +
-
-  scale_x_continuous(breaks = 1:15) +
-  labs(
-    title = "Lottery Picks (1–15): Average Performance and Representative Players",
-    subtitle = "Blue line = Average PerformanceScore | Black dots = Players Closest to Average",
-    x = "Draft Pick",
-    y = "Performance Score"
-  ) +
-  theme_minimal(base_size = 13) +
-  theme(
-    plot.title = element_text(face = "bold", hjust = 0.5),
-    plot.subtitle = element_text(hjust = 0.5)
-  )
+  print(p)
+}
 ```
 
 ```{r}
@@ -683,5 +664,66 @@ ggplot(team_summary, aes(x = Team, y = AvgFinalScore, group = 1)) +
     plot.title = element_text(face = "bold", hjust = 0.5)
   )
 
+```
+
+```{r}
+library(ggplot2)
+library(dplyr)
+
+# Summarize average performance by position and pick
+pos_pick_summary <- FinalDraftData %>%
+  group_by(Position, Pick) %>%
+  summarise(
+    AvgPerformance = mean(PerformanceScore, na.rm = TRUE),
+    .groups = "drop"
+  )
+
+# Plot with custom colors (no red)
+ggplot(pos_pick_summary, aes(x = Pick, y = AvgPerformance, color = Position)) +
+  geom_line(linewidth = 1.3) +
+  geom_point(size = 2) +
+  scale_color_manual(
+    values = c("G" = "#1f77b4",   # blue
+               "F" = "#2ca02c",   # green
+               "C" = "#9467bd")   # purple
+  ) +
+  scale_x_continuous(breaks = seq(1, max(pos_pick_summary$Pick), by = 5)) +
+  labs(
+    title = "Average Player Performance by Draft Pick and Position",
+    subtitle = "Colored lines and dots show average PerformanceScore per position",
+    x = "Draft Pick",
+    y = "Average Performance Score"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "top"
+  )
+
+
+
+
+
+
+
+
+```
+
+```{r}
+ggplot(pos_pick_summary, aes(x = factor(Pick), y = AvgPerformance, fill = Position)) +
+  geom_col(position = "dodge") +
+  labs(
+    title = "Average PerformanceScore by Pick and Position",
+    subtitle = "Bars show relative strength by position for each draft pick",
+    x = "Draft Pick",
+    y = "Average Performance Score"
+  ) +
+  theme_minimal(base_size = 14) +
+  theme(
+    plot.title = element_text(face = "bold", hjust = 0.5),
+    plot.subtitle = element_text(hjust = 0.5),
+    legend.position = "top"
+  )
 ```
 
