@@ -357,65 +357,148 @@ players_positions_df$Position[797] <- "C"
 players_positions_df$Position[807] <- "F"
 players_positions_df$Position[810] <- "F"
 players_positions_df$Position[816] <- "F"
+players_positions_df$Position[73] <- "F"
 
 DraftData <- DraftData %>% left_join(players_positions_df, by = "Player")
 ```
 
-```{r}
-players_positions_df$Position[73] <- "F"
-```
+
 
 ```{r}
-# optimization model to make weights for PerformanceScore
+set.seed(83)
 library(dplyr)
-library(stringr)
-
-# ensure numeric
-num_cols <- c("PTS","TRB","AST","STL","BLK","TOV",
-              "FGPercent","FreeThrowPercent","ThreePointPercent","AvailabilityScore")
-for (cn in num_cols) if (cn %in% names(DraftData)) DraftData[[cn]] <- as.numeric(DraftData[[cn]])
-
-# map positions to G/F/C (in case of stray lowercase)
-DraftData <- DraftData %>% mutate(Pos3 = toupper(Position))
-#install.packages(c("glmnet", "dplyr", "tidyr", "scales"))
 library(glmnet)
-library(dplyr)
-  FinalDraftData[is.na(FinalDraftData)] <- 0
-FinalDraftData <- FinalDraftData %>%
-  mutate(Position = factor(Position))
-get_position_weights <- function(data, position_name) {
-  
-  position_data <- data %>% filter(Position == position_name)
-  
-  # Select predictor columns
-  features <- position_data %>%
-    select(PTS, TRB, AST, STL, BLK, TOV, FGPercent, FreeThrowPercent, ThreePointPercent)
-  
-  # Standardize features
-  x <- scale(as.matrix(features))
-  y <- position_data$VORP
-  
-  # Fit ridge regression
-  cvfit <- cv.glmnet(x, y, alpha = 0)  # alpha=0 -> ridge
-  model <- glmnet(x, y, alpha = 0, lambda = cvfit$lambda.min)
-  
-  # Extract coefficients
-  weights <- as.numeric(coef(model))[-1]  # drop intercept
-  names(weights) <- colnames(features)
-  
-  # Normalize so weights sum to 1 (for interpretability)
-  weights_norm <- weights / sum(abs(weights))
-  
-  tibble(Position = position_name,
-         Stat = names(weights_norm),
-         Weight = weights_norm)
-}
-weights_guard   <- get_position_weights(FinalDraftData, "G")
-weights_forward <- get_position_weights(FinalDraftData, "F")
-weights_center  <- get_position_weights(FinalDraftData, "C")
+# install.packages(c("Hmisc")) # for rcorr p-values
+library(Hmisc)
 
-all_weights <- bind_rows(weights_guard, weights_forward, weights_center)
+# --- 0) columns & helpers ---
+feature_cols <- c("PTS","TRB","AST","STL","BLK","TOV",
+                  "FGPercent","FreeThrowPercent","ThreePointPercent")
+
+to_numeric <- function(df, cols) {
+  for (cn in cols) if (cn %in% names(df)) df[[cn]] <- as.numeric(df[[cn]])
+  df
+}
+
+r2_fn <- function(y_true, y_pred) {
+  ss_res <- sum((y_true - y_pred)^2, na.rm = TRUE)
+  ss_tot <- sum((y_true - mean(y_true, na.rm = TRUE))^2, na.rm = TRUE)
+  1 - ss_res/ss_tot
+}
+
+# --- 1) one-position trainer that returns everything you asked for ---
+fit_position <- function(data, position_name, y_col = "VORP",
+                         test_frac = 0.2, save_models = TRUE) {
+
+  df <- data %>% filter(Position == position_name) %>% 
+    select(all_of(c(feature_cols, y_col))) %>% na.omit()
+
+  if (nrow(df) < 20) stop(paste("Not enough rows for position", position_name))
+
+  # split
+  n <- nrow(df)
+  idx_test <- sample(seq_len(n), size = ceiling(test_frac * n))
+  test  <- df[idx_test, ]
+  train <- df[-idx_test, ]
+
+  # scale with train params
+  x_train <- scale(as.matrix(train[, feature_cols]))
+  x_test  <- scale(as.matrix(test[,  feature_cols]),
+                   center = attr(x_train, "scaled:center"),
+                   scale  = attr(x_train, "scaled:scale"))
+  y_train <- train[[y_col]]
+  y_test  <- test[[y_col]]
+
+  # ridge with CV
+  cvfit <- cv.glmnet(x_train, y_train, alpha = 0, standardize = FALSE)
+  model <- glmnet(x_train, y_train, alpha = 0, lambda = cvfit$lambda.min,
+                  standardize = FALSE)
+
+  # weights (drop intercept), normalize to sum |w| = 1
+  w <- as.numeric(coef(model))[-1]
+  names(w) <- colnames(x_train)
+  w_norm <- w / sum(abs(w))
+  weights_tbl <- tibble(Position = position_name,
+                        Stat = names(w_norm),
+                        Weight = as.numeric(w_norm))
+
+  # test metrics
+  pred_test <- as.numeric(predict(model, newx = x_test))
+  r2_test   <- r2_fn(y_test, pred_test)
+  rmse_test <- sqrt(mean((y_test - pred_test)^2))
+  metrics_tbl <- tibble(Position = position_name,
+                        Model = "Ridge (lambda.min)",
+                        R2_Test = r2_test,
+                        RMSE_Test = rmse_test,
+                        N_Train = nrow(train), N_Test = nrow(test))
+
+  # correlations (+ p-values) among features
+  rc <- Hmisc::rcorr(as.matrix(df[, feature_cols]))
+  cor_mat <- rc$r
+  p_mat   <- rc$P
+
+  # OLS for p-values (diagnostic only; multicollinearity caveats apply)
+  # Use same train set (unscaled is fine for p-values)
+  ols_df <- train
+  ols_formula <- as.formula(
+    paste(y_col, "~", paste(feature_cols, collapse = " + "))
+  )
+  ols_fit <- lm(ols_formula, data = ols_df)
+  ols_summary <- summary(ols_fit)
+
+  # extract tidy-ish OLS table
+  ols_table <- as.data.frame(ols_summary$coefficients)
+  ols_table$Predictor <- rownames(ols_table)
+  rownames(ols_table) <- NULL
+  names(ols_table) <- c("Estimate","StdError","t","p_value","Predictor")
+  ols_table <- ols_table %>% filter(Predictor != "(Intercept)") %>%
+    arrange(p_value)
+
+  # optionally save model to disk
+  if (save_models) {
+    saveRDS(list(model = model,
+                 cv = cvfit,
+                 center = attr(x_train,"scaled:center"),
+                 scale  = attr(x_train,"scaled:scale"),
+                 features = feature_cols,
+                 y_col = y_col,
+                 position = position_name),
+            file = paste0("ridge_", position_name, ".rds"))
+  }
+
+  list(
+    weights = weights_tbl,
+    metrics = metrics_tbl,
+    cor_matrix = cor_mat,
+    cor_pvalues = p_mat,
+    ols_table = ols_table
+  )
+}
+
+# --- 2) run for your data (expects FinalDraftData with numeric features + Position + VORP) ---
+# Ensure numerics
+FinalDraftData <- read.csv("FinalDraftData.csv")
+FinalDraftData <- to_numeric(FinalDraftData, c(feature_cols, "VORP"))
+FinalDraftData$Position <- factor(FinalDraftData$Position, levels = c("G","F","C"))
+
+res_G <- fit_position(FinalDraftData, "G")
+res_F <- fit_position(FinalDraftData, "F")
+res_C <- fit_position(FinalDraftData, "C")
+
+# collect weights & metrics
+all_weights <- bind_rows(res_G$weights, res_F$weights, res_C$weights)
+all_metrics <- bind_rows(res_G$metrics, res_F$metrics, res_C$metrics)
+
 print(all_weights)
+print(all_metrics)
+
+# example: view top OLS signals for guards
+head(res_G$ols_table, 10)
+
+# example: correlation matrix for forwards (values and p-values)
+res_F$cor_matrix[1:5, 1:5]
+res_F$cor_pvalues[1:5, 1:5]
+
 ```
 
 ```{r}
@@ -424,13 +507,13 @@ DraftData <- DraftData %>%
   mutate(
     PerformanceScore= case_when(
       Position == "G" ~ (
-         0.301392942*PTS + 0.131585761*TRB + 0.245252914*AST + 0.071600908*STL + 0.088402778*BLK - 0.110155566*TOV + 0.003795444*FGPercent          + 0.029598577*FreeThrowPercent + 0.018215110*ThreePointPercent + 0.015*AvailabilityScore
+         0.3643590224	*PTS + 0.1680422451	*TRB + 0.1915565534	*AST + 0.0502018637	*STL + 0.1179875371	*BLK - 0.0114203810	*TOV - 0.0196260790	*FGPercent + 0.0180259115		*FreeThrowPercent +0.0587804068		*ThreePointPercent+ 0.015	*AvailabilityScore
       ),
       Position == "F" ~ (
-        0.278032221*PTS + 0.035431424*TRB + 0.363261918*AST + 0.003023791*STL + 0.143949521*BLK -0.141206541*TOV + 0.001456723*FGPercent +         0.009143780*FreeThrowPercent + 0.024494081*ThreePointPercent +0.015*AvailabilityScore
+        0.2498149599	*PTS + 0.0528860681	*TRB + 0.4003164475	*AST - 0.0150143829	*STL + 0.1257441821	*BLK -0.1051423144	*TOV - 0.0100611978	*FGPercent - 0.0228781508	*FreeThrowPercent  - 0.0181422966	*ThreePointPercent +0.015*AvailabilityScore
       ),
       Position == "C" ~ (
-        0.166423233*PTS + 0.099124073*TRB + 0.377695524*AST + 0.006508985*STL + 0.093415676*BLK - 0.159690953*TOV + 0.054962999*FGPercent +         0.013530175*FreeThrowPercent + 0.028648381*ThreePointPercent +0.015*AvailabilityScore
+        0.1567796142	*PTS + 0.1133047432	*TRB + 0.377695524*AST - 0.0007074915	*STL + 0.0913250405*	BLK - 0.1527700789	*TOV + 0.0571077744	*FGPercent -0.0174904306	*FreeThrowPercent + 0.0324260233	*ThreePointPercent +0.015*AvailabilityScore
       ),
       TRUE ~ NA_real_
     )
@@ -438,6 +521,7 @@ DraftData <- DraftData %>%
 
 
 ```
+
 
 
 ```{r}
@@ -462,6 +546,8 @@ avg_by_pick <- DraftDataFiltered %>%
 ```{r}
 # Make FinalScore
 FinalDraftData <- DraftDataFiltered
+FinalDraftData$Position[462] <- "F"
+FinalDraftData$PerformanceScore[462] <- 2.9676235745
 FinalDraftData <- FinalDraftData %>%
    left_join(avg_by_pick, by = "Pick")
 FinalDraftData <- FinalDraftData %>%
@@ -670,27 +756,24 @@ ggplot(team_summary, aes(x = Team, y = AvgFinalScore, group = 1)) +
 library(ggplot2)
 library(dplyr)
 
-# Summarize average performance by position and pick
-pos_pick_summary <- FinalDraftData %>%
-  group_by(Position, Pick) %>%
+FinalDraftData <- read.csv("FinalDraftData.csv")
+
+# Average performance by pick (ignore Position)
+pick_summary <- FinalDraftData %>%
+  group_by(Pick) %>%
   summarise(
     AvgPerformance = mean(PerformanceScore, na.rm = TRUE),
     .groups = "drop"
   )
 
-# Plot with custom colors (no red)
-ggplot(pos_pick_summary, aes(x = Pick, y = AvgPerformance, color = Position)) +
+# Plot
+ggplot(pick_summary, aes(x = Pick, y = AvgPerformance)) +
   geom_line(linewidth = 1.3) +
   geom_point(size = 2) +
-  scale_color_manual(
-    values = c("G" = "#1f77b4",   # blue
-               "F" = "#2ca02c",   # green
-               "C" = "#9467bd")   # purple
-  ) +
-  scale_x_continuous(breaks = seq(1, max(pos_pick_summary$Pick), by = 5)) +
+  scale_x_continuous(breaks = seq(1, max(pick_summary$Pick, na.rm = TRUE), by = 5)) +
   labs(
-    title = "Average Player Performance by Draft Pick and Position",
-    subtitle = "Colored lines and dots show average PerformanceScore per position",
+    title = "Average Player Performance by Draft Pick",
+    subtitle = "Mean PerformanceScore aggregated across all positions",
     x = "Draft Pick",
     y = "Average Performance Score"
   ) +
@@ -698,9 +781,8 @@ ggplot(pos_pick_summary, aes(x = Pick, y = AvgPerformance, color = Position)) +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5),
     plot.subtitle = element_text(hjust = 0.5),
-    legend.position = "top"
+    legend.position = "none"
   )
-
 
 
 

@@ -8,7 +8,7 @@ output:
 
 ## Abstract
 
-This project studies the success of NBA players drafted between the years 1995-2015 by showing their career success relative to their draft position. Using a variety of data points including career points, rebounds, assists, steals, blocks, turnovers, three point percentage, free throw percentage and field goal percentage, averages were compiled for each of the players in the dataset.(reword) In order to evaluate pure performance without any draft position weight attached, a formula was created called PerformanceScore in which it incorporates all of the statistics we created into a formula that encompasses the entirety of a player's career. For each position (G,F,C), the stats are weighted differently using a regularized linear regression model in the PerformanceScore formula. Next, the ExpectedScore metric was produced to represent the predicted PerformanceScore for a player based on their draft position. Finally, the FinalScore was created by combining both PerformanceScore and ExpectedScore to get a ranking of every single player drafted from the year 1995-2015’s career success relative to their draft position. This analysis provides an insight into under and over achievers throughout this 20 year span while also being able to provide General Managers insights and trends for future draft selections.
+This project studies the success of NBA players drafted between the years 1995-2015 by showing their career success relative to their draft position. Averages were compiled for each of the players in the dataset using a variety of data points including career points, rebounds, assists, steals, blocks, turnovers, three point percentage, free throw percentage and field goal percentage. In order to evaluate pure performance without any draft position weight attached, a formula was created called PerformanceScore in which it incorporates all of the statistics we created into a formula that encompasses the entirety of a player's career. For each position (G,F,C), the stats are weighted differently using a regularized linear regression model in the PerformanceScore formula. Next, the ExpectedScore metric was produced to represent the predicted PerformanceScore for a player based on their draft position. Finally, the FinalScore was created by combining both PerformanceScore and ExpectedScore to get a ranking of every single player drafted from the year 1995-2015’s career success relative to their draft position. This analysis provides an insight into under and over achievers throughout this 20 year span while also being able to provide General Managers insights and trends for future draft selections.
 
 ## Introduction
 
@@ -98,33 +98,30 @@ To calculate the ExpectedScore, the average PerformanceScore per pick is found. 
 
 ## Results
 
-After the ridge regression optimization model to create weights and apply the PerformanceScore, ExpectedScore and FinalScore to all the players in our dataset, a series of leaderboards filtered by position were returned.(Leaderboards will be in Appendix). When looking at Performance per Pick, the mean PerformanceScore/ExpectedScore is not a linear decline with variability as the last overall 60th pick has the highest ExpectedScore after the top 10 picks. Figure 1 shows the average PerformanceScore while taking both position and pick into account. The worst overall position and pick is the 32nd overall pick and the centers while the best is the first overall pick guards. The guards consistently have the biggest PerformanceScore, outperforming the 2 other positions while the forwards display the most steady and moderate values. The centers have the most variance in the graph, showing the extreme difficulty that is needed to draft a big in the modern NBA.
+After the ridge regression optimization model to create weights and apply the PerformanceScore, ExpectedScore and FinalScore to all the players in our dataset, a series of leaderboards filtered by position were returned.(Leaderboards will be in Appendix). Figure 1 shows the average PerformanceScore per pick. When looking at Performance per Pick, the mean PerformanceScore/ExpectedScore is not a linear decline with variability as the last overall 60th pick has the highest ExpectedScore after the top 10 picks. The graph also shows the low variance of the lottery, as most of the top 15 picks are "safe" while simultaneously showing that the late first to second round picks have a lower average return but a greater variance of pick. Outcomes in this latter part of the draft are spiky, not steady as the median value is low but outliers(Nikola Jokic, Manu Ginobili) pull the mean up.
 
 ```{r echo=FALSE, message=FALSE}
 library(ggplot2)
 library(dplyr)
+
 FinalDraftData <- read.csv("FinalDraftData.csv")
-# Summarize average performance by position and pick
-pos_pick_summary <- FinalDraftData %>%
-  group_by(Position, Pick) %>%
+
+# Average performance by pick (ignore Position)
+pick_summary <- FinalDraftData %>%
+  group_by(Pick) %>%
   summarise(
     AvgPerformance = mean(PerformanceScore, na.rm = TRUE),
     .groups = "drop"
   )
 
-# Plot with custom colors (no red)
-ggplot(pos_pick_summary, aes(x = Pick, y = AvgPerformance, color = Position)) +
+# Plot
+ggplot(pick_summary, aes(x = Pick, y = AvgPerformance)) +
   geom_line(linewidth = 1.3) +
   geom_point(size = 2) +
-  scale_color_manual(
-    values = c("G" = "#1f77b4",   # blue
-               "F" = "#2ca02c",   # green
-               "C" = "#9467bd")   # purple
-  ) +
-  scale_x_continuous(breaks = seq(1, max(pos_pick_summary$Pick), by = 5)) +
+  scale_x_continuous(breaks = seq(1, max(pick_summary$Pick, na.rm = TRUE), by = 5)) +
   labs(
-    title = "Average Player Performance by Draft Pick and Position",
-    subtitle = "Colored lines and dots show average PerformanceScore per position",
+    title = "Average Player Performance by Draft Pick",
+    subtitle = "Mean PerformanceScore aggregated across all positions",
     x = "Draft Pick",
     y = "Average Performance Score"
   ) +
@@ -132,13 +129,8 @@ ggplot(pos_pick_summary, aes(x = Pick, y = AvgPerformance, color = Position)) +
   theme(
     plot.title = element_text(face = "bold", hjust = 0.5),
     plot.subtitle = element_text(hjust = 0.5),
-    legend.position = "top"
+    legend.position = "none"
   )
-
-
-
-
-
 
 
 
@@ -195,8 +187,8 @@ for (pos in positions) {
 }
 ```
 
-After looking at the best and worst players per lottery pick, the natural question arises? When drafting in the lottery, what type of players should one expect per pick? Figures 3a, 3b and 3c examine the player closest to the average Performance Score for their pick among the top 15 picks in the draft. The blue line visualization demonstrates how average player performance declines with draft pick, but the curve is not perfectly linear in all 3 positions. Mid-lottery players over exceeded expectations at times, showing the natural variability of draft outcomes. (Looking at the graphs, mid-lottery players generally have higher averages smth abt this)
-(need some help phrasing this part, will talk about in next session)
+After looking at the best and worst players per lottery pick, the natural question arises: When drafting in the lottery, what type of players should one expect per pick? Figures 3a, 3b and 3c examine the player closest to the average Performance Score for their pick among the top 15 picks in the draft.  The blue line visualization demonstrates how average player performance declines with draft pick, but the curve is not perfectly linear in all 3 positions. The black dots above and below the line represent the players drafted at the pick shown that are closest to the average. These players show draft analysts and general managers what their baseline is when drafting in the lottery and how they should go about strategizing around that. Mid-lottery players over exceeded expectations at times, showing the natural variability of draft outcomes. 
+
 ```{r echo=FALSE, message=FALSE, fig.show='hold', out.width='45%', fig.align='center'}
 
 FinalDraftData <- read.csv("FinalDraftData.csv")
@@ -242,7 +234,7 @@ for (pos in positions) {
 
 
 
-When looking at the average FinalScore for every team in Figure 4, the San Antonio Spurs come out on top having an average FinalScore of approx 0.91656023 over 0.5 over the next best team of the Oklahoma City Thunder. From 1995-2015, the Spurs were a dynasty, having great players such as Tim Duncan and Manu Ginobili. This analysis just reinforces their front office’s role in their success. On the other hand, the Dallas Mavericks had the worst average having an average Final Score of approximately -0.870. Seeing as the Mavericks won a championship in 2011, this is extremely interesting. Upon further analysis, we can see that they traded for their star player in Dirk Nowitzki who was drafted by the Bucks on draft night, showing how they obtained their success.(Note, as shown in the previous example, we can not attribute a player’s success to the team that drafted them as the Milwaukee Bucks played no role in the success of Dirk Nowitzki’s career so take this analysis with a grain of salt). This analysis benefits general managers in 2 ways, they first can analyze team success using this graph and try to model their drafting strategies around the most successful drafting teams. They can also use this to hire and recruit scouts or other people in the front office that have been successful when drafting championship-level players and teams in the past.
+When looking at the average FinalScore for every team in Figure 4, the San Antonio Spurs come out on top having an average FinalScore of approx 0.91656023 over 0.5 over the next best team of the Oklahoma City Thunder. From 1995-2015, the Spurs were a dynasty, having great players such as Tim Duncan and Manu Ginobili. This analysis just reinforces their front office’s role in their success. On the other hand, the Dallas Mavericks had the worst average having an average Final Score of approximately -0.870. Seeing as the Mavericks won a championship in 2011, this is extremely interesting. Upon further analysis, we can see that they traded for their star player in Dirk Nowitzki who was drafted by the Bucks on draft night, showing how they obtained their success.(Note, as shown in the previous example, we can not attribute a player’s success to the team that drafted them as the Milwaukee Bucks played no role in the success of Dirk Nowitzki’s career so take this analysis with a grain of salt). This analysis benefits general managers in 2 ways, they first can analyze team success using this graph and try to model their drafting strategies around the most successful drafting teams. They can also use this to hire and recruit scouts or other people in the front office that have been successful when drafting championship-level players and teams in the past. While this graph doesn't show the people in the front office on these successful teams, you can use a website like Linkedin to find and recruit these scouts.
 
 ```{r echo=FALSE, message=FALSE}
 team_summary <- read.csv("team_summary.csv")
@@ -277,7 +269,7 @@ This study developed a data-driven framework to analyze the success of NBA playe
 
 The results show the true positional trends in the lottery. Guards exhibited the narrowest range of outcomes, showing that they have the least overall draft risk when choosing who to select. Forwards showed the most variance producing top caliber players in the early lottery picks with a big dip in the middle and a resurgence with late lottery value picks as well. Centers showed that they should not be taken in the lottery as most of the best centers in terms of PerformanceScore and FinalScore were taken in the later picks with a low quality of performance in centers in the lottery.
 
-In this project, others may have doubts around the PerformanceScore formula which is why a webapp in which you can remake the formulas to fit what you think the ideal guard, forward and center should be scoring. The formulas in this project is purely a standard in which the average center, guard and forward can be assessed. Something else that could be used to find different weights is to use a different optimization model such as Lasso or Elastic Net regression. In attempting to create the best FinalScore formula, z-score was experimented with, before FinalScore was just a straight deviation from the mean. When using z-score, the results were very skewed and the leaderboards did not provide an accurate description of what the project was meant to do so the FinalScore formula was changed to PerformanceScore-ExpectedScore.  
+In this project, others may have doubts around the PerformanceScore formula which is why a webapp in which you can remake the formulas to fit what you think the ideal guard, forward and center should be scoring. The formulas in this project is purely a standard in which the average center, guard and forward can be assessed. Something else that could be used to find different weights is to use a different optimization model such as Lasso or Elastic Net regression. In attempting to create the best FinalScore formula, z-score was experimented with, before FinalScore was just a straight deviation from the mean. When using z-score, the results were very skewed and the leaderboards did not accomplish the project goal due to them blowing up outliers and having an overemphasis on draft position rather than a combination of both pick and performance.
 
 Future work in this topic could include predictive validity, using this analysis and finding similarities in players in upcoming drafts or players that have just been drafted to predict how well they will do relative to their draft position in the future.
 
