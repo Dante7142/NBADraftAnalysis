@@ -51,23 +51,6 @@ h1 {
   border-color: #1e3a8a;
 }
 
-
-.resetButton {
-  margin-left: auto;
-  border: 1px solid #0f766e;
-  border-radius: 10px;
-  background: #14b8a6;
-  color: #042f2e;
-  padding: 0.45rem 0.8rem;
-  font-weight: 700;
-  cursor: pointer;
-}
-
-.resetButton:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-
 .sliderGrid {
   display: grid;
   margin-top: 1rem;

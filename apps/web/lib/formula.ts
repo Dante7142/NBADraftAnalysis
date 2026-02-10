@@ -1,57 +1,78 @@
 import { DraftPlayer, FormulaWeights, MetricKey, Position } from './types';
 
-export const ORIGINAL_FORMULA_WEIGHTS: Record<Position, FormulaWeights> = {
+export const DEFAULT_WEIGHTS: Record<Position, FormulaWeights> = {
   G: {
-    pts: 0.3643590224,
-    trb: 0.1680422451,
-    ast: 0.1915565534,
-    stl: 0.0502018637,
-    blk: 0.1179875371,
-    tov: -0.011420381,
-    fgPercent: -0.019626079,
-    freeThrowPercent: 0.0180259115,
-    threePointPercent: 0.0587804068,
-    availability: 0.015
+    pts: 1.2,
+    trb: 0.6,
+    ast: 1.3,
+    ws: 1,
+    bpm: 1,
+    vorp: 1,
+    stl: 0.9,
+    blk: 0.3,
+    tov: -0.7,
+    availability: 0.8
   },
   F: {
-    pts: 0.2498149599,
-    trb: 0.0528860681,
-    ast: 0.4003164475,
-    stl: -0.0150143829,
-    blk: 0.1257441821,
-    tov: -0.1051423144,
-    fgPercent: -0.0100611978,
-    freeThrowPercent: -0.0228781508,
-    threePointPercent: -0.0181422966,
-    availability: 0.015
+    pts: 1.1,
+    trb: 1,
+    ast: 0.7,
+    ws: 1,
+    bpm: 1,
+    vorp: 0.9,
+    stl: 0.7,
+    blk: 0.8,
+    tov: -0.6,
+    availability: 0.8
   },
   C: {
-    pts: 0.1567796142,
-    trb: 0.1133047432,
-    ast: 0.377695524,
-    stl: -0.0007074915,
-    blk: 0.0913250405,
-    tov: -0.1527700789,
-    fgPercent: 0.0571077744,
-    freeThrowPercent: -0.0174904306,
-    threePointPercent: 0.0324260233,
-    availability: 0.015
+    pts: 1,
+    trb: 1.3,
+    ast: 0.5,
+    ws: 1.1,
+    bpm: 1,
+    vorp: 1,
+    stl: 0.5,
+    blk: 1.2,
+    tov: -0.6,
+    availability: 0.9
   }
 };
 
 const metricValue = (player: DraftPlayer, key: MetricKey) =>
   key === 'availability' ? player.availability : player.metrics[key];
 
+const zScore = (value: number, mean: number, stdDev: number) => {
+  if (stdDev === 0) {
+    return 0;
+  }
+  return (value - mean) / stdDev;
+};
+
 export const scorePosition = (
   players: DraftPlayer[],
   position: Position,
   weights: FormulaWeights
 ) => {
-  return players
-    .filter((player) => player.position === position)
+  const pool = players.filter((player) => player.position === position);
+  const metrics = Object.keys(weights) as MetricKey[];
+
+  const stats = Object.fromEntries(
+    metrics.map((key) => {
+      const values = pool.map((player) => metricValue(player, key));
+      const mean = values.reduce((sum, value) => sum + value, 0) / Math.max(values.length, 1);
+      const variance =
+        values.reduce((sum, value) => sum + (value - mean) ** 2, 0) / Math.max(values.length, 1);
+      return [key, { mean, stdDev: Math.sqrt(variance) }];
+    })
+  ) as Record<MetricKey, { mean: number; stdDev: number }>;
+
+  return pool
     .map((player) => {
-      const score = (Object.keys(weights) as MetricKey[]).reduce((sum, key) => {
-        return sum + metricValue(player, key) * weights[key];
+      const score = metrics.reduce((sum, key) => {
+        const value = metricValue(player, key);
+        const { mean, stdDev } = stats[key];
+        return sum + zScore(value, mean, stdDev) * weights[key];
       }, 0);
 
       return {
@@ -59,15 +80,5 @@ export const scorePosition = (
         score
       };
     })
-    .sort((a, b) => b.score - a.score)
-    .slice(0, 10);
-};
-
-export const isOriginalFormula = (weightsByPosition: Record<Position, FormulaWeights>) => {
-  const tolerance = 1e-9;
-  return (Object.keys(ORIGINAL_FORMULA_WEIGHTS) as Position[]).every((position) => {
-    return (Object.keys(ORIGINAL_FORMULA_WEIGHTS[position]) as MetricKey[]).every((key) => {
-      return Math.abs(weightsByPosition[position][key] - ORIGINAL_FORMULA_WEIGHTS[position][key]) <= tolerance;
-    });
-  });
+    .sort((a, b) => b.score - a.score);
 };
