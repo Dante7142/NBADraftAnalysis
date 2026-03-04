@@ -14,45 +14,42 @@ import {
   XAxis,
   YAxis
 } from 'recharts';
-import { isOriginalFormula, ORIGINAL_FORMULA_WEIGHTS, scorePosition } from '@/lib/formula';
-import { DraftPlayer, FormulaWeights, LeaderboardPlayer, MetricKey, Position } from '@/lib/types';
+import { DEFAULT_WEIGHTS, scorePosition } from '@/lib/formula';
+import { DraftPlayer, FormulaWeights, MetricKey, Position } from '@/lib/types';
 
 const METRIC_LABELS: Record<MetricKey, string> = {
-  pts: 'Points (PTS)',
-  trb: 'Rebounds (TRB)',
-  ast: 'Assists (AST)',
-  stl: 'Steals (STL)',
-  blk: 'Blocks (BLK)',
-  tov: 'Turnovers (TOV)',
-  fgPercent: 'FG%',
-  freeThrowPercent: 'FT%',
-  threePointPercent: '3P%',
+  pts: 'PTS',
+  trb: 'TRB',
+  ast: 'AST',
+  ws: 'Win Shares',
+  bpm: 'BPM',
+  vorp: 'VORP',
+  stl: 'STL',
+  blk: 'BLK',
+  tov: 'TOV (penalty)',
   availability: 'Availability'
 };
 
 type Props = {
   players: DraftPlayer[];
-  originalLeaderboards: Record<Position, LeaderboardPlayer[]>;
 };
 
-export function FormulaDashboard({ players, originalLeaderboards }: Props) {
+export function FormulaDashboard({ players }: Props) {
   const [activePosition, setActivePosition] = useState<Position>('G');
   const [weightsByPosition, setWeightsByPosition] = useState<Record<Position, FormulaWeights>>(
-    ORIGINAL_FORMULA_WEIGHTS
+    DEFAULT_WEIGHTS
   );
 
-  const computedLeaderboards = useMemo(
+  const leaderboards = useMemo(
     () => ({
-      G: scorePosition(players, 'G', weightsByPosition.G),
-      F: scorePosition(players, 'F', weightsByPosition.F),
-      C: scorePosition(players, 'C', weightsByPosition.C)
+      G: scorePosition(players, 'G', weightsByPosition.G).slice(0, 10),
+      F: scorePosition(players, 'F', weightsByPosition.F).slice(0, 10),
+      C: scorePosition(players, 'C', weightsByPosition.C).slice(0, 10)
     }),
     [players, weightsByPosition]
   );
 
-  const showingOriginal = isOriginalFormula(weightsByPosition);
-  const displayedLeaderboards = showingOriginal ? originalLeaderboards : computedLeaderboards;
-  const activeBoard = displayedLeaderboards[activePosition];
+  const activeBoard = leaderboards[activePosition];
 
   const teamComparison = useMemo(() => {
     const grouped = new Map<string, { total: number; count: number }>();
@@ -92,73 +89,38 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
 
   return (
     <main className="container">
-      <section className="hero">
-        <div>
-          <p className="eyebrow">NBA Draft Analysis</p>
-          <h1>PerformanceScore Formula Studio</h1>
-          <p className="subtitle">
-            Explore how position-specific formula changes affect the top draft outcomes. The app loads with
-            your original formula and `leaderboards.csv`, then updates live as you tune weights.
-          </p>
-        </div>
-        <div className="heroStatus">
-          <p className="statusLabel">Mode</p>
-          <p className={`statusPill ${showingOriginal ? 'original' : 'custom'}`}>
-            {showingOriginal ? 'Original Baseline' : 'Custom Formula'}
-          </p>
-        </div>
-      </section>
-
-      <section className="card aboutCard">
-        <h2>About this project</h2>
-        <p>
-          This project evaluates NBA draft outcomes (1995–2015) by comparing each player&apos;s career
-          production against expectations for their draft slot. The core idea is to build a
-          position-specific <strong>PerformanceScore</strong>, combine it with expected value by pick, and
-          highlight overperformers and underperformers.
-        </p>
-        <p>
-          Use this webapp as a what-if lab: keep the original formula for the canonical baseline, then
-          adjust metric weights to test alternate scouting philosophies for Guards, Forwards, and Centers.
-        </p>
-      </section>
+      <h1>NBA Draft Performance Formula Lab</h1>
+      <p>
+        Tune the score formula by position. Each slider change recalculates the top-10 leaderboard in
+        real time.
+      </p>
 
       <section className="card">
-        <div className="toolbar">
-          <div className="positionTabs" role="tablist" aria-label="Select position">
-            {(['G', 'F', 'C'] as Position[]).map((position) => (
-              <button
-                key={position}
-                className={position === activePosition ? 'active' : ''}
-                onClick={() => setActivePosition(position)}
-              >
-                {position}
-              </button>
-            ))}
-          </div>
-          <button
-            className="resetButton"
-            type="button"
-            onClick={() => setWeightsByPosition(ORIGINAL_FORMULA_WEIGHTS)}
-            disabled={showingOriginal}
-          >
-            Revert to original formula
-          </button>
+        <div className="positionTabs">
+          {(['G', 'F', 'C'] as Position[]).map((position) => (
+            <button
+              key={position}
+              className={position === activePosition ? 'active' : ''}
+              onClick={() => setActivePosition(position)}
+            >
+              {position}
+            </button>
+          ))}
         </div>
 
         <div className="sliderGrid">
           {(Object.keys(weightsByPosition[activePosition]) as MetricKey[]).map((metric) => {
             const value = weightsByPosition[activePosition][metric];
             return (
-              <label key={metric} className="sliderRow">
+              <label key={metric}>
                 <span>
-                  {METRIC_LABELS[metric]} <strong>{value.toFixed(4)}</strong>
+                  {METRIC_LABELS[metric]}: <strong>{value.toFixed(2)}</strong>
                 </span>
                 <input
                   type="range"
-                  min={-0.5}
-                  max={0.5}
-                  step={0.0005}
+                  min={-2}
+                  max={2}
+                  step={0.05}
                   value={value}
                   onChange={(event) => setWeight(metric, Number(event.target.value))}
                 />
@@ -173,23 +135,21 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
           <article key={position} className="card">
             <h2>{position} Leaderboard (Top 10)</h2>
             <ol>
-              {displayedLeaderboards[position].map((player, index) => (
+              {leaderboards[position].map((player) => (
                 <li key={`${position}-${player.player}`}>
                   <img
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(player.player)}&background=1e3a8a&color=fff`}
+                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(player.player)}&background=random`}
                     alt={player.player}
-                    width={36}
-                    height={36}
+                    width={34}
+                    height={34}
                   />
                   <div>
-                    <strong>
-                      #{player.rank ?? index + 1} {player.player}
-                    </strong>
+                    <strong>{player.player}</strong>
                     <small>
                       {player.team} • Pick #{player.pick}
                     </small>
                   </div>
-                  <span className="scoreValue">{player.score.toFixed(3)}</span>
+                  <span>{player.score.toFixed(2)}</span>
                 </li>
               ))}
             </ol>
@@ -199,30 +159,30 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
 
       <section className="grid twoUp">
         <article className="card chartCard">
-          <h2>{activePosition}: Team Comparison</h2>
-          <ResponsiveContainer width="100%" height={300}>
+          <h2>{activePosition}: Team Comparison (Top 10)</h2>
+          <ResponsiveContainer width="100%" height={280}>
             <BarChart data={teamComparison}>
               <CartesianGrid strokeDasharray="3 3" />
               <XAxis dataKey="team" />
               <YAxis />
               <Tooltip />
               <Legend />
-              <Bar dataKey="avgScore" fill="#2563eb" name="Avg score" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="players" fill="#14b8a6" name="# of players" radius={[6, 6, 0, 0]} />
+              <Bar dataKey="avgScore" fill="#1d4ed8" name="Avg score" />
+              <Bar dataKey="players" fill="#14b8a6" name="# of players" />
             </BarChart>
           </ResponsiveContainer>
         </article>
 
         <article className="card chartCard">
           <h2>{activePosition}: Outlier View (Pick vs Score)</h2>
-          <ResponsiveContainer width="100%" height={300}>
+          <ResponsiveContainer width="100%" height={280}>
             <ScatterChart>
               <CartesianGrid />
               <XAxis dataKey="pick" name="Draft pick" />
-              <YAxis dataKey="score" name="Score" />
+              <YAxis dataKey="score" name="Formula score" />
               <Tooltip cursor={{ strokeDasharray: '3 3' }} />
               <ReferenceLine y={outlierThreshold} stroke="#dc2626" label="Outlier threshold" />
-              <Scatter data={activeBoard} fill="#7c3aed" />
+              <Scatter data={activeBoard} fill="#9333ea" />
             </ScatterChart>
           </ResponsiveContainer>
         </article>
