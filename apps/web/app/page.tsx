@@ -1,7 +1,9 @@
 import { FormulaDashboard } from '@/components/formula-dashboard';
-import { getDraftPlayers } from '@/lib/data';
+import { getDraftPlayers, getOriginalLeaderboards } from '@/lib/data';
 
 export default function Page() {
   const players = getDraftPlayers();
-  return <FormulaDashboard players={players} />;
+  const originalLeaderboards = getOriginalLeaderboards();
+
+  return <FormulaDashboard players={players} originalLeaderboards={originalLeaderboards} />;
 }
