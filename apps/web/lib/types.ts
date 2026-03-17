@@ -10,18 +10,13 @@ export type DraftPlayer = {
     pts: number;
     trb: number;
     ast: number;
+    ws: number;
+    bpm: number;
+    vorp: number;
     stl: number;
     blk: number;
     tov: number;
-    fgPercent: number;
-    freeThrowPercent: number;
-    threePointPercent: number;
   };
-};
-
-export type LeaderboardPlayer = DraftPlayer & {
-  score: number;
-  rank?: number;
 };
 
 export type MetricKey = keyof DraftPlayer['metrics'] | 'availability';
