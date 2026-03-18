@@ -80,10 +80,20 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
     }));
   }, [players, weightsByPosition]);
 
+
+  const isPositionOriginal = (position: Position) => {
+    const keys = Object.keys(ORIGINAL_FORMULA_WEIGHTS[position]) as MetricKey[];
+    return keys.every(
+      (key) => Math.abs(weightsByPosition[position][key] - ORIGINAL_FORMULA_WEIGHTS[position][key]) <= 1e-9
+    );
+  };
+
   const showingOriginal = isOriginalFormula(weightsByPosition);
-  const displayedLeaderboards: Record<Position, LeaderboardPlayer[]> = showingOriginal
-    ? originalLeaderboards
-    : computedLeaderboards;
+  const displayedLeaderboards: Record<Position, LeaderboardPlayer[]> = {
+    G: isPositionOriginal('G') ? originalLeaderboards.G : computedLeaderboards.G,
+    F: isPositionOriginal('F') ? originalLeaderboards.F : computedLeaderboards.F,
+    C: isPositionOriginal('C') ? originalLeaderboards.C : computedLeaderboards.C
+  };
 
   const lotteryByPick = useMemo(() => {
     const lotteryPool = scoredPools[activePosition].filter((player) => player.pick >= 1 && player.pick <= 15);
