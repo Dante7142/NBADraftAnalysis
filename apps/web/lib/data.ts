@@ -34,7 +34,7 @@ const toNumber = (value: string | undefined) => {
   return Number.isFinite(parsed) ? parsed : 0;
 };
 
-const normalizePosition = (value: string): Position | null => {
+export const normalizePosition = (value: string): Position | null => {
   if (value === 'G' || value === 'F' || value === 'C') {
     return value;
   }
@@ -96,7 +96,7 @@ export const getDraftPlayers = (): DraftPlayer[] => {
     .filter((player): player is DraftPlayer => player !== null);
 };
 
-export const getOriginalLeaderboards = (): Record<Position, LeaderboardPlayer[]> => {
+const parseLeaderboards = (maxRank?: number): Record<Position, LeaderboardPlayer[]> => {
   const csv = fs.readFileSync(resolveCsvPath('leaderboards.csv'), 'utf8');
   const parsed = Papa.parse<RawLeaderboardRow>(csv, {
     header: true,
@@ -113,7 +113,10 @@ export const getOriginalLeaderboards = (): Record<Position, LeaderboardPlayer[]>
     }
 
     const rank = toNumber(row.PosRank);
-    if (rank < 1 || rank > 10) {
+    if (rank < 1) {
+      return;
+    }
+    if (typeof maxRank === 'number' && rank > maxRank) {
       return;
     }
 
@@ -144,4 +147,12 @@ export const getOriginalLeaderboards = (): Record<Position, LeaderboardPlayer[]>
   });
 
   return grouped;
+};
+
+export const getOriginalLeaderboards = (): Record<Position, LeaderboardPlayer[]> => {
+  return parseLeaderboards(10);
+};
+
+export const getFullOriginalLeaderboards = (): Record<Position, LeaderboardPlayer[]> => {
+  return parseLeaderboards();
 };

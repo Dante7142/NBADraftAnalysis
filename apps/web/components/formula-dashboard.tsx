@@ -1,6 +1,7 @@
 'use client';
 
 import { useMemo, useState } from 'react';
+import Link from 'next/link';
 import {
   CartesianGrid,
   LabelList,
@@ -258,6 +259,11 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
                 </li>
               ))}
             </ol>
+            <div className="seeMoreWrap">
+              <Link className="seeMoreButton" href={`/leaderboards/${position}`}>
+                See more
+              </Link>
+            </div>
           </article>
         ))}
       </section>
