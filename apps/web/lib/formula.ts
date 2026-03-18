@@ -42,29 +42,36 @@ export const ORIGINAL_FORMULA_WEIGHTS: Record<Position, FormulaWeights> = {
 const metricValue = (player: DraftPlayer, key: MetricKey) =>
   key === 'availability' ? player.availability : player.metrics[key];
 
-export const scorePosition = (
+export const scorePlayer = (player: DraftPlayer, weights: FormulaWeights) => {
+  return (Object.keys(weights) as MetricKey[]).reduce((sum, key) => {
+    return sum + metricValue(player, key) * weights[key];
+  }, 0);
+};
+
+export const scoreAllPlayersForPosition = (
   players: DraftPlayer[],
   position: Position,
   weights: FormulaWeights
-) : LeaderboardPlayer[] => {
+): LeaderboardPlayer[] => {
   return players
     .filter((player) => player.position === position)
-    .map((player) => {
-      const score = (Object.keys(weights) as MetricKey[]).reduce((sum, key) => {
-        return sum + metricValue(player, key) * weights[key];
-      }, 0);
-
-      return {
-        ...player,
-        score
-      };
-    })
+    .map((player) => ({
+      ...player,
+      score: scorePlayer(player, weights)
+    }))
     .sort((a, b) => b.score - a.score)
-    .slice(0, 10)
     .map((player, index) => ({
       ...player,
       rank: index + 1
     }));
+};
+
+export const scorePosition = (
+  players: DraftPlayer[],
+  position: Position,
+  weights: FormulaWeights
+): LeaderboardPlayer[] => {
+  return scoreAllPlayersForPosition(players, position, weights).slice(0, 10);
 };
 
 export const isOriginalFormula = (weightsByPosition: Record<Position, FormulaWeights>) => {

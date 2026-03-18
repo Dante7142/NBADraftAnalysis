@@ -2,10 +2,11 @@
 
 import { useMemo, useState } from 'react';
 import {
-  Bar,
-  BarChart,
   CartesianGrid,
+  LabelList,
   Legend,
+  Line,
+  LineChart,
   ReferenceLine,
   ResponsiveContainer,
   Scatter,
@@ -14,7 +15,13 @@ import {
   XAxis,
   YAxis
 } from 'recharts';
-import { isOriginalFormula, ORIGINAL_FORMULA_WEIGHTS, scorePosition } from '@/lib/formula';
+import {
+  isOriginalFormula,
+  ORIGINAL_FORMULA_WEIGHTS,
+  scoreAllPlayersForPosition,
+  scorePlayer,
+  scorePosition
+} from '@/lib/formula';
 import { DraftPlayer, FormulaWeights, LeaderboardPlayer, MetricKey, Position } from '@/lib/types';
 
 const METRIC_LABELS: Record<MetricKey, string> = {
@@ -35,6 +42,12 @@ type Props = {
   originalLeaderboards: Record<Position, LeaderboardPlayer[]>;
 };
 
+type LotteryPoint = {
+  pick: number;
+  score: number;
+  player: string;
+};
+
 export function FormulaDashboard({ players, originalLeaderboards }: Props) {
   const [activePosition, setActivePosition] = useState<Position>('G');
   const [weightsByPosition, setWeightsByPosition] = useState<Record<Position, FormulaWeights>>(
@@ -50,37 +63,85 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
     [players, weightsByPosition]
   );
 
+  const scoredPools = useMemo<Record<Position, LeaderboardPlayer[]>>(
+    () => ({
+      G: scoreAllPlayersForPosition(players, 'G', weightsByPosition.G),
+      F: scoreAllPlayersForPosition(players, 'F', weightsByPosition.F),
+      C: scoreAllPlayersForPosition(players, 'C', weightsByPosition.C)
+    }),
+    [players, weightsByPosition]
+  );
+
+  const scoredAllPlayers = useMemo(() => {
+    return players.map((player) => ({
+      ...player,
+      score: scorePlayer(player, weightsByPosition[player.position])
+    }));
+  }, [players, weightsByPosition]);
+
   const showingOriginal = isOriginalFormula(weightsByPosition);
   const displayedLeaderboards: Record<Position, LeaderboardPlayer[]> = showingOriginal
     ? originalLeaderboards
     : computedLeaderboards;
-  const activeBoard = displayedLeaderboards[activePosition];
 
-  const teamComparison = useMemo(() => {
-    const grouped = new Map<string, { total: number; count: number }>();
-    activeBoard.forEach((player) => {
-      const current = grouped.get(player.team) ?? { total: 0, count: 0 };
-      grouped.set(player.team, {
+  const lotteryByPick = useMemo(() => {
+    const lotteryPool = scoredPools[activePosition].filter((player) => player.pick >= 1 && player.pick <= 15);
+    const grouped = new Map<number, { best: LeaderboardPlayer; worst: LeaderboardPlayer }>();
+
+    lotteryPool.forEach((player) => {
+      const current = grouped.get(player.pick);
+      if (!current) {
+        grouped.set(player.pick, { best: player, worst: player });
+        return;
+      }
+
+      if (player.score > current.best.score) {
+        current.best = player;
+      }
+      if (player.score < current.worst.score) {
+        current.worst = player;
+      }
+    });
+
+    return Array.from(grouped.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([pick, pair]) => ({
+        pick,
+        best: pair.best,
+        worst: pair.worst
+      }));
+  }, [activePosition, scoredPools]);
+
+  const bestLotteryPoints: LotteryPoint[] = lotteryByPick.map((entry) => ({
+    pick: entry.pick,
+    score: Number(entry.best.score.toFixed(3)),
+    player: entry.best.player
+  }));
+
+  const worstLotteryPoints: LotteryPoint[] = lotteryByPick.map((entry) => ({
+    pick: entry.pick,
+    score: Number(entry.worst.score.toFixed(3)),
+    player: entry.worst.player
+  }));
+
+  const averageByPick = useMemo(() => {
+    const grouped = new Map<number, { total: number; count: number }>();
+
+    scoredAllPlayers.forEach((player) => {
+      const current = grouped.get(player.pick) ?? { total: 0, count: 0 };
+      grouped.set(player.pick, {
         total: current.total + player.score,
         count: current.count + 1
       });
     });
 
-    return [...grouped.entries()]
-      .map(([team, values]) => ({
-        team,
-        avgScore: Number((values.total / values.count).toFixed(2)),
-        players: values.count
-      }))
-      .sort((a, b) => b.avgScore - a.avgScore);
-  }, [activeBoard]);
-
-  const outlierThreshold = useMemo(() => {
-    if (activeBoard.length === 0) return 0;
-    const mean = activeBoard.reduce((sum, p) => sum + p.score, 0) / activeBoard.length;
-    const variance = activeBoard.reduce((sum, p) => sum + (p.score - mean) ** 2, 0) / activeBoard.length;
-    return mean + Math.sqrt(variance);
-  }, [activeBoard]);
+    return Array.from(grouped.entries())
+      .sort((a, b) => a[0] - b[0])
+      .map(([pick, values]) => ({
+        pick,
+        averageScore: Number((values.total / values.count).toFixed(3))
+      }));
+  }, [scoredAllPlayers]);
 
   const setWeight = (metric: MetricKey, value: number) => {
     setWeightsByPosition((prev) => ({
@@ -203,31 +264,60 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
 
       <section className="grid twoUp">
         <article className="card chartCard">
-          <h2>{activePosition}: Team Comparison</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <BarChart data={teamComparison}>
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="team" />
-              <YAxis />
-              <Tooltip />
+          <h2>Lottery Picks (1–15): Best and Worst {activePosition}s by Draft Pick</h2>
+          <p className="chartSubtitle">Green = Best Performer | Red = Worst Performer</p>
+          <ResponsiveContainer width="100%" height={420}>
+            <ScatterChart margin={{ top: 24, right: 20, bottom: 16, left: 16 }}>
+              <CartesianGrid />
+              <XAxis
+                dataKey="pick"
+                type="number"
+                domain={[1, 15]}
+                ticks={[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12, 13, 14, 15]}
+                label={{ value: 'Draft Pick', position: 'insideBottom', offset: -8 }}
+              />
+              <YAxis
+                dataKey="score"
+                type="number"
+                label={{ value: 'Performance Score', angle: -90, position: 'insideLeft' }}
+              />
+              <Tooltip formatter={(value: number) => value.toFixed(3)} />
               <Legend />
-              <Bar dataKey="avgScore" fill="#2563eb" name="Avg score" radius={[6, 6, 0, 0]} />
-              <Bar dataKey="players" fill="#14b8a6" name="# of players" radius={[6, 6, 0, 0]} />
-            </BarChart>
+              <Scatter name="Best performer" data={bestLotteryPoints} fill="#15803d">
+                <LabelList dataKey="player" position="top" fontSize={12} fill="#15803d" />
+              </Scatter>
+              <Scatter name="Worst performer" data={worstLotteryPoints} fill="#dc2626">
+                <LabelList dataKey="player" position="bottom" fontSize={12} fill="#dc2626" />
+              </Scatter>
+            </ScatterChart>
           </ResponsiveContainer>
         </article>
 
         <article className="card chartCard">
-          <h2>{activePosition}: Outlier View (Pick vs Score)</h2>
-          <ResponsiveContainer width="100%" height={300}>
-            <ScatterChart>
+          <h2>Average Player Performance by Draft Pick</h2>
+          <p className="chartSubtitle">Mean PerformanceScore aggregated across all positions</p>
+          <ResponsiveContainer width="100%" height={420}>
+            <LineChart data={averageByPick} margin={{ top: 24, right: 20, bottom: 16, left: 16 }}>
               <CartesianGrid />
-              <XAxis dataKey="pick" name="Draft pick" />
-              <YAxis dataKey="score" name="Score" />
-              <Tooltip cursor={{ strokeDasharray: '3 3' }} />
-              <ReferenceLine y={outlierThreshold} stroke="#dc2626" label="Outlier threshold" />
-              <Scatter data={activeBoard} fill="#7c3aed" />
-            </ScatterChart>
+              <XAxis
+                dataKey="pick"
+                label={{ value: 'Draft Pick', position: 'insideBottom', offset: -8 }}
+              />
+              <YAxis
+                dataKey="averageScore"
+                label={{ value: 'Average Performance Score', angle: -90, position: 'insideLeft' }}
+              />
+              <Tooltip formatter={(value: number) => value.toFixed(3)} />
+              <ReferenceLine y={0} stroke="#94a3b8" />
+              <Line
+                type="monotone"
+                dataKey="averageScore"
+                stroke="#0f172a"
+                strokeWidth={3}
+                dot={{ r: 3 }}
+                activeDot={{ r: 5 }}
+              />
+            </LineChart>
           </ResponsiveContainer>
         </article>
       </section>
