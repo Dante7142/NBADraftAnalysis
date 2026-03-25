@@ -190,12 +190,18 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
           This project evaluates NBA draft outcomes (1995–2015) by comparing each player&apos;s career
           production against expectations for their draft slot. The core idea is to build a
           position-specific <strong>PerformanceScore</strong>, combine it with expected value by pick, and
-          highlight overperformers and underperformers.
+          highlight overperformers and underperformers. The current weights shown are a reflection of the
+          ridge regression model. Users can play around with the numbers as they wish to see if they
+          disagree or agree with weights. General Managers can use this to look for players that better fit
+          their programs (ex. points-oriented vs rebounds-oriented).
         </p>
         <p>
-          Use this webapp as a what-if lab: keep the original formula for the canonical baseline, then
-          adjust metric weights to test alternate scouting philosophies for Guards, Forwards, and Centers.
+          Link to github repo:{' '}
+          <a href="https://github.com/Dante7142/NBADraftAnalysis.git" target="_blank" rel="noreferrer">
+            https://github.com/Dante7142/NBADraftAnalysis.git
+          </a>
         </p>
+        <p>Email me with any question at vedapothina@gmail.com</p>
       </section>
 
       <section className="card">
