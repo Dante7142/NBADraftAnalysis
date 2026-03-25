@@ -24,6 +24,7 @@ import {
   scorePosition
 } from '@/lib/formula';
 import { DraftPlayer, FormulaWeights, LeaderboardPlayer, MetricKey, Position } from '@/lib/types';
+import { PlayerAvatar } from '@/components/player-avatar';
 
 const METRIC_LABELS: Record<MetricKey, string> = {
   pts: 'Points (PTS)',
@@ -257,12 +258,7 @@ export function FormulaDashboard({ players, originalLeaderboards }: Props) {
             <ol>
               {displayedLeaderboards[position].map((player, index) => (
                 <li key={`${position}-${player.player}`}>
-                  <img
-                    src={`https://ui-avatars.com/api/?name=${encodeURIComponent(player.player)}&background=1e3a8a&color=fff`}
-                    alt={player.player}
-                    width={36}
-                    height={36}
-                  />
+                  <PlayerAvatar playerName={player.player} size={36} />
                   <div>
                     <strong>
                       #{player.rank ?? index + 1} {player.player}
